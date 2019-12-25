@@ -15,13 +15,14 @@ class ViewController: UIViewController {
         
         view.backgroundColor = UIColor.hexString("#101124")
         
-        let w: CGFloat = 300
-        let moonView = PTMoonView(frame: CGRect(x: view.width / 2 - w / 2, y: 130, width: w , height: w),
+        let moonView = PTMoonView(frame: CGRect(x: 0, y: 130, width: view.width , height: view.width),
+                                  moonRadius: view.width / 2,
+                                  panelRadius: view.width / 2,
                                   showBrightnessPanel: true,
                                   showHuePanel: true)
         view.addSubview(moonView)
 
-        moonView.reload(bri: 0.3)
+        moonView.reload(bri: 0.5)
         moonView.reload(hue: 0.4)
         
         moonView.briChangeCompletion = { (bri) in

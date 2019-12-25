@@ -28,7 +28,7 @@ class PTMoonView: UIView, PTMoonViewCapable {
     private let showHuePanel: Bool
     private let moonNode = SCNNode()
     private let lightNode = SCNNode()
-    private let kRotateDistance: Float = 100 // 玄学距离
+    private let kRotateDistance: Float = 600 // 玄学距离
     private var startPanLocation = CGPoint.zero
     private var latestPanLocation = CGPoint.zero
     private var endPanVelocity = CGPoint.zero
@@ -81,6 +81,7 @@ class PTMoonView: UIView, PTMoonViewCapable {
         return panel
         }()
     
+    /// 球的半径会受制于view的bounds大小
     init(frame: CGRect,
          moonRadius: CGFloat = 35,
          panelRadius: CGFloat = 150,
@@ -141,7 +142,7 @@ class PTMoonView: UIView, PTMoonViewCapable {
         omniLightNode.light = omniLight
         sceneView.scene?.rootNode.addChildNode(omniLightNode)
         
-        lightNode.position = SCNVector3Make(0, 0,kRotateDistance)
+        lightNode.position = SCNVector3Make(0, 0, -kRotateDistance)
         let hueLight = SCNLight()
         hueLight.type = .omni
         hueLight.color = UIColor.white
