@@ -5,10 +5,11 @@
 //  Created by 芝麻酱 on 2019/12/24.
 //  Copyright © 2019 芝麻酱. All rights reserved.
 //
-import Foundation
+import UIKit
 import SceneKit
 
 protocol PTMoonViewCapable {
+    
     /// 0...1
     func reload(bri value: CGFloat)
     /// 0...1
@@ -18,18 +19,44 @@ protocol PTMoonViewCapable {
 @objc
 class PTMoonView: UIView, PTMoonViewCapable {
     
+    typealias ChangeHandler = (CGFloat)->()
+
+    var hueChangeCompletion: ChangeHandler?
+    var briChangeCompletion: ChangeHandler?
+    
     private let showBriPanel: Bool
     private let showHuePanel: Bool
     private let moonNode = SCNNode()
     private let lightNode = SCNNode()
     private let kRotateDistance: Float = 100 // 玄学距离
     private var startPanLocation = CGPoint.zero
-    private var endRotateVelocity = CGPoint.zero
-    private var currentBri: CGFloat = 0
-    private var currentHue: CGFloat = 0
+    private var latestPanLocation = CGPoint.zero
+    private var endPanVelocity = CGPoint.zero
     private let moonRadius: CGFloat
     private let panelRadius: CGFloat
-
+    private var displayLink: CADisplayLink?
+    
+    private var currentBri: CGFloat = 0 {
+        didSet {
+            if currentBri > 1 { currentBri = 1.0 }
+            if currentBri < 0 { currentBri = 0.0 }
+            
+            if let h = self.briChangeCompletion {
+                h(currentBri)
+            }
+        }
+    }
+    private var currentHue: CGFloat = 0 {
+        didSet {
+            if currentHue > 1 { currentHue = 1.0 }
+            if currentHue < 0 { currentHue = 0.0 }
+            
+            if let h = self.hueChangeCompletion {
+                h(currentHue)
+            }
+        }
+    }
+    
     private lazy var briPanel: PTMoonPanelView = { [unowned self] in
         let panel = PTMoonPanelView(frame: CGRect(x: 0, y: 0, width: self.panelRadius * 2, height: self.panelRadius * 2),
                                     pointCounts: 11,
@@ -41,7 +68,7 @@ class PTMoonView: UIView, PTMoonViewCapable {
                                     intervalRadian: CGFloat(Double.pi / 30.0),
                                     fromSettletdClockwise: false)
         return panel
-    }()
+        }()
     private lazy var huePanel: PTMoonPanelView = { [unowned self] in
         let panel = PTMoonPanelView(frame: CGRect(x: 0, y: 0, width: self.panelRadius * 2, height: self.panelRadius * 2),
                                     pointCounts: 11,
@@ -52,8 +79,8 @@ class PTMoonView: UIView, PTMoonViewCapable {
                                     position: .left,
                                     intervalRadian: CGFloat(Double.pi / 30.0))
         return panel
-    }()
-
+        }()
+    
     init(frame: CGRect,
          moonRadius: CGFloat = 35,
          panelRadius: CGFloat = 150,
@@ -137,39 +164,89 @@ class PTMoonView: UIView, PTMoonViewCapable {
         
         let translation = panGes.translation(in: self)
         
-        let changeHorizDistance = translation.x - startPanLocation.x
-        let changeVerticalDistance = translation.y - startPanLocation.y
-        
-        var briValue = currentBri - changeHorizDistance / 1000
-        if briValue > 1 { briValue = 1.0 }
-        if briValue < 0 { briValue = 0.0 }
-        
-        var hueValue = currentHue - changeVerticalDistance / 1000
-        if hueValue > 1 { hueValue = 1.0 }
-        if hueValue < 0 { hueValue = 0.0 }
-        
         switch panGes.state {
         case .began:
             startPanLocation = translation
+            latestPanLocation = CGPoint.zero
+            refreshMoonPivot()
+            stopTimer()
             
         case .changed:
-            rotateMoon(x: changeHorizDistance, y: changeVerticalDistance, rate: 0.8)
-            briPanel.reload(value: briValue)
-            huePanel.reload(value: hueValue)
-            rotateLightNode(with: Float(briValue))
-            lightNode.light?.color = UIColor.colorBetween(UIColor.hexString("#ffffff"),
-                                                          endColor: UIColor.hexString("#ffce64"),
-                                                          location: hueValue)
+            let horizTransformDistance = translation.x - startPanLocation.x
+            let verticalTransformDistance = translation.y - startPanLocation.y
+            
+            refreshUI(moonTransformX: horizTransformDistance,
+                      moonTransformY: verticalTransformDistance,
+                      briChange: (horizTransformDistance - latestPanLocation.x),
+                      hueChange: (verticalTransformDistance - latestPanLocation.y))
+            
+            latestPanLocation = CGPoint(x: horizTransformDistance, y: verticalTransformDistance)
+            
         case .ended:
-           refreshMoonPivot()
-           currentBri = briValue
-           currentHue = hueValue
-
+            endPanVelocity = panGes.velocity(in: self)
+            startPanLocation = CGPoint(x: translation.x - startPanLocation.x,
+                                       y: translation.y - startPanLocation.y)
+            beginTimer()
+            
         default:
             break
         }
     }
-
+    
+    private func beginTimer() {
+        if displayLink != nil { return }
+        displayLink = CADisplayLink(target: self, selector: #selector(timerAction))
+        displayLink?.preferredFramesPerSecond = 0
+        displayLink?.add(to: RunLoop.main, forMode: .default)
+    }
+    
+    private func stopTimer() {
+        if displayLink == nil { return }
+        displayLink?.isPaused = true
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+    
+    @objc private func timerAction() {
+        let velocityDecreaseRatio: CGFloat = 0.8
+        let newVelocity = CGPoint(x: endPanVelocity.x * velocityDecreaseRatio,
+                                  y: endPanVelocity.y * velocityDecreaseRatio)
+        
+        let moveTime: CGFloat = 1 / 90.0
+        let movePoint = CGPoint(x: newVelocity.x * moveTime, y: newVelocity.y * moveTime)
+        
+        if abs(movePoint.x) <= 1 && abs(movePoint.y) <= 1 {
+            stopTimer()
+            return
+        }
+        startPanLocation.x += movePoint.x
+        startPanLocation.y += movePoint.y
+        endPanVelocity = newVelocity
+        
+        refreshUI(moonTransformX: startPanLocation.x,
+                  moonTransformY: startPanLocation.y,
+                  briChange: movePoint.x,
+                  hueChange: movePoint.y)
+    }
+    
+    private func refreshUI(moonTransformX: CGFloat,
+                           moonTransformY: CGFloat,
+                           briChange: CGFloat,
+                           hueChange: CGFloat) {
+        
+        currentBri -= briChange / 1000
+        currentHue -= hueChange / 1000
+        
+        rotateMoon(x: moonTransformX, y: moonTransformY, rate: 0.8)
+        
+        briPanel.reload(value: currentBri)
+        huePanel.reload(value: currentHue)
+        rotateLightNode(with: Float(currentBri))
+        lightNode.light?.color = UIColor.colorBetween(UIColor.hexString("#ffffff"),
+                                                      endColor: UIColor.hexString("#ffce64"),
+                                                      location: currentHue)
+    }
+    
     private func rotateMoon(x: CGFloat, y: CGFloat, rate: CGFloat) {
         let angle = sqrt(pow(x, 2) + pow(y, 2)) * CGFloat(Double.pi) / 180.0
         moonNode.rotation = SCNVector4Make(Float(y), Float(x), 0, Float(angle * rate))
@@ -181,10 +258,10 @@ class PTMoonView: UIView, PTMoonViewCapable {
         moonNode.pivot = SCNMatrix4Mult(changeMatrix, matrix)
         moonNode.transform = SCNMatrix4Identity
     }
-
+    
     /// value  1...0
     private func rotateLightNode(with value: Float) {
-//        // 对应的光源旋转角度是 0...pi
+        //        // 对应的光源旋转角度是 0...pi
         let x = sinf(value * Float(Double.pi)) * kRotateDistance
         let z = -cos(value * Float(Double.pi)) * kRotateDistance
         lightNode.position = SCNVector3Make(x, 0, z)

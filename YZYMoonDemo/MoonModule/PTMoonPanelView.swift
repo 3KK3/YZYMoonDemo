@@ -6,7 +6,7 @@
 //  Copyright © 2019 芝麻酱. All rights reserved.
 //
 
-import Foundation
+import UIKit
 
 protocol PTMoonPanelCapable {
     /// value: 0...1
@@ -34,12 +34,12 @@ class PTMoonPanelView: UIView, PTMoonPanelCapable {
     private let settledLabel = UILabel(frame: CGRect(x: 0, y: 0, width: 12, height: 12))
     private let dazzlingImgView = UIImageView(frame: CGRect(x: 0, y: 0, width: 6, height: 6))
     private let dazzlingLabel = UILabel(frame: CGRect(x: 0, y: 0, width: 12, height: 12))
- 
+    
     private var points = [CAShapeLayer]()
-    private let indicatePoint = CAShapeLayer()
     private let kPointWidth: CGFloat = 5
     private let kIndicatorPointWidth: CGFloat = 12
-
+    private let indicatePoint = UIView()
+    
     /// 构造仪表盘
     /// - Parameters:
     ///   - pointCounts: 点的数量，包含边上的大○点
@@ -49,7 +49,7 @@ class PTMoonPanelView: UIView, PTMoonPanelCapable {
     ///   - dazzlingText: 另一个顶边文案
     ///   - position: 圆弧所在位置
     ///   - intervalRadian: 点间隔弧度
-
+    
     init(frame: CGRect,
          pointCounts: Int,
          settledColor: UIColor,
@@ -79,16 +79,16 @@ class PTMoonPanelView: UIView, PTMoonPanelCapable {
     }
     
     private func setupUI() {
-                
+        
         for index in 0..<pointCounts {
             
             let p = fromSettledClockwise ?
-                path(endAngle: startAngle + intervalRadian * CGFloat(index)).cgPath :
-                path(endAngle: startAngle - intervalRadian * CGFloat(index)).cgPath
+                path(endAngle: startAngle + intervalRadian * CGFloat(index)) :
+                path(endAngle: startAngle - intervalRadian * CGFloat(index))
             
             if index == 0 {
                 settledImgView.center = p.currentPoint
-                indicatePoint.position = p.currentPoint
+                indicatePoint.center = p.currentPoint
                 continue
             }
             
@@ -108,7 +108,7 @@ class PTMoonPanelView: UIView, PTMoonPanelCapable {
         
         settledImgView.image = UIImage(named: "icon_masterTune_top")
         addSubview(settledImgView)
-
+        
         dazzlingImgView.image = UIImage(named: "icon_masterTune_top")
         addSubview(dazzlingImgView)
         
@@ -138,13 +138,13 @@ class PTMoonPanelView: UIView, PTMoonPanelCapable {
                 dazzlingLabel.center = CGPoint(x: dazzlingImgView.x - padding - dazzlingLabel.width / 2,
                                                y: dazzlingImgView.centerY)
             }
-
+            
         case .right:
             settledLabel.center = CGPoint(x: settledImgView.right + padding + settledLabel.width / 2,
                                           y: settledImgView.centerY)
             dazzlingLabel.center = CGPoint(x: dazzlingImgView.right + padding + dazzlingLabel.width / 2,
                                            y: dazzlingImgView.centerY)
-
+            
         case .left:
             settledLabel.center = CGPoint(x: settledImgView.x - padding - settledLabel.width / 2,
                                           y: settledImgView.centerY)
@@ -164,10 +164,10 @@ class PTMoonPanelView: UIView, PTMoonPanelCapable {
             }
         }
         
-        indicatePoint.backgroundColor = settledColor.cgColor
+        indicatePoint.backgroundColor = settledColor
         indicatePoint.bounds = CGRect(x: 0, y: 0, width: kIndicatorPointWidth, height: kIndicatorPointWidth)
-        indicatePoint.cornerRadius = 6
-        layer.addSublayer(indicatePoint)
+        indicatePoint.layer.cornerRadius = kIndicatorPointWidth / 2
+        addSubview(indicatePoint)
     }
     
     private func path(endAngle: CGFloat) -> UIBezierPath {
@@ -193,7 +193,7 @@ class PTMoonPanelView: UIView, PTMoonPanelCapable {
                 } else {
                     startAngle = CGFloat(Double.pi / 2 * 3) + (totalAngle / 2)
                 }
-    
+                
             case .left:
                 if fromSettledClockwise {
                     // 起始角度是180度开始  逆时针偏移一半
@@ -228,7 +228,7 @@ extension PTMoonPanelView {
     
     func reload(value: CGFloat) {
         var checkValue: CGFloat = value
-                
+        
         if checkValue > 1 { checkValue = 1.0 }
         if checkValue < 0 { checkValue = 0.0 }
         
@@ -238,10 +238,13 @@ extension PTMoonPanelView {
         
         let p = path(endAngle: endAngle)
         
-        indicatePoint.position = p.cgPath.currentPoint
+        //        let x = width / 2.0 + width / 2.0 * cos(endAngle)
+        //        let y = width / 2.0 + width / 2.0 * sin(endAngle)
+        indicatePoint.center = p.currentPoint
         indicatePoint.backgroundColor = UIColor.colorBetween(settledColor,
                                                              endColor: dazzlingColor,
-                                                             location: checkValue).cgColor
+                                                             location: checkValue)
+        
         for (index, point) in points.enumerated() {
             
             if p.cgPath.contains(CGPoint(x: floor(point.position.x), y: floor(point.position.y))) ||
